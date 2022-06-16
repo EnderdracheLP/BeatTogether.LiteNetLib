@@ -1,9 +1,11 @@
-﻿using System;
+﻿using Serilog;
+using System;
 using System.Buffers;
 using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using System.Threading;
 
 namespace NetCoreServer
 {
@@ -214,6 +216,9 @@ namespace NetCoreServer
             DatagramsSent = 0;
             DatagramsReceived = 0;
 
+            _udpThread = new Thread(() => ReceiveAsync());
+            _udpThread.Start();
+
             // Update the started flag
             IsStarted = true;
 
@@ -327,6 +332,10 @@ namespace NetCoreServer
         private bool _sending;
         private Buffer _sendBuffer;
         private SocketAsyncEventArgs _sendEventArg;
+        // Threads
+        private Thread _udpThread;
+        // Logger
+        private readonly ILogger _logger = Log.ForContext<UdpServer>();
 
         /// <summary>
         /// Multicast datagram to the prepared mulicast endpoint (asynchronous)
@@ -465,22 +474,43 @@ namespace NetCoreServer
         /// </summary>
         private void TryReceive()
         {
-            if (_receiving)
-                return;
-
-            if (!IsStarted)
-                return;
-
-            try
+            while (IsStarted)
             {
-                // Async receive with the receive handler
-                _receiving = true;
-                _receiveEventArg.RemoteEndPoint = _receiveEndpoint;
-                _receiveEventArg.SetBuffer(_receiveBuffer.Data, 0, (int)_receiveBuffer.Capacity);
-                if (!Socket.ReceiveFromAsync(_receiveEventArg))
-                    ProcessReceiveFrom(_receiveEventArg);
+                if (_receiving)
+                    continue;
+
+                if (!IsStarted)
+                    return;
+
+                try
+                {
+                    //var buffer = new byte[size];
+                    //var length = Receive(ref _receiveEndpoint, _receiveBuffer.Data);
+                    //_receiving = true;
+                    //// Receive datagram from the client
+                    //int received = Socket.ReceiveFrom(_receiveBuffer.Data, 0, (int)_receiveBuffer.Capacity, SocketFlags.None, ref _receiveEndpoint);
+
+                    //// Update statistic
+                    //DatagramsReceived++;
+                    //BytesReceived += received;
+
+                    //// Call the datagram received handler
+                    //_receiving = false;
+                    //OnReceived(_receiveEndpoint, _receiveBuffer.Data.AsSpan(0, (int)_receiveBuffer.Capacity));
+                    // Async receive with the receive handler
+                    _receiving = true;
+                    _receiveEventArg.RemoteEndPoint = _receiveEndpoint;
+                    _receiveEventArg.SetBuffer(_receiveBuffer.Data, 0, (int)_receiveBuffer.Capacity);
+                    if (!Socket.ReceiveFromAsync(_receiveEventArg))
+                        ProcessReceiveFrom(_receiveEventArg);
+                }
+                catch (ObjectDisposedException) { return; }
+                catch (SocketException ex)
+                {
+                    SendError(ex.SocketErrorCode);
+                }
+
             }
-            catch (ObjectDisposedException) {}
         }
 
         /// <summary>
@@ -502,6 +532,7 @@ namespace NetCoreServer
                 _sendEventArg.SetBuffer(_sendBuffer.Data, 0, (int)(_sendBuffer.Size));
                 if (!Socket.SendToAsync(_sendEventArg))
                     ProcessSendTo(_sendEventArg);
+                else _logger.Warning("Failed to send data");
             }
             catch (ObjectDisposedException) {}
         }
