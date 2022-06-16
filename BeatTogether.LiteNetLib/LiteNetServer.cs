@@ -46,8 +46,8 @@ namespace BeatTogether.LiteNetLib
             _packetLayer = packetLayer;
         }
 
-        //protected override void OnStarted()
-        //    => ReceiveAsync();
+        protected override void OnStarted()
+            => ReceiveAsync();
 
         protected override void OnReceived(EndPoint endPoint, ReadOnlySpan<byte> buffer)
         {

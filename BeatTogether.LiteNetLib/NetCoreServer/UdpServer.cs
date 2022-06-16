@@ -6,6 +6,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace NetCoreServer
 {
@@ -216,8 +217,8 @@ namespace NetCoreServer
             DatagramsSent = 0;
             DatagramsReceived = 0;
 
-            _udpThread = new Thread(() => ReceiveAsync());
-            _udpThread.Start();
+            //_udpThread = new Thread(() => ReceiveAsync());
+            //_udpThread.Start();
 
             // Update the started flag
             IsStarted = true;
@@ -333,7 +334,7 @@ namespace NetCoreServer
         private Buffer _sendBuffer;
         private SocketAsyncEventArgs _sendEventArg;
         // Threads
-        private Thread _udpThread;
+        //private Thread _udpThread;
         // Logger
         private readonly ILogger _logger = Log.ForContext<UdpServer>();
 
@@ -466,7 +467,7 @@ namespace NetCoreServer
         public virtual void ReceiveAsync()
         {
             // Try to receive datagram
-            TryReceive();
+            Task.Factory.StartNew(TryReceive);
         }
 
         /// <summary>
@@ -474,16 +475,18 @@ namespace NetCoreServer
         /// </summary>
         private void TryReceive()
         {
+            if (_receiving)
+                return;
+
+            if (!IsStarted)
+                return;
+
             while (IsStarted)
             {
-                if (_receiving)
-                    continue;
-
-                if (!IsStarted)
-                    return;
-
+                while (_receiving || Socket.Available <= 0) Thread.Yield();
                 try
                 {
+                    _receiving = true;
                     //var buffer = new byte[size];
                     //var length = Receive(ref _receiveEndpoint, _receiveBuffer.Data);
                     //_receiving = true;
@@ -498,19 +501,19 @@ namespace NetCoreServer
                     //_receiving = false;
                     //OnReceived(_receiveEndpoint, _receiveBuffer.Data.AsSpan(0, (int)_receiveBuffer.Capacity));
                     // Async receive with the receive handler
-                    _receiving = true;
                     _receiveEventArg.RemoteEndPoint = _receiveEndpoint;
                     _receiveEventArg.SetBuffer(_receiveBuffer.Data, 0, (int)_receiveBuffer.Capacity);
                     if (!Socket.ReceiveFromAsync(_receiveEventArg))
                         ProcessReceiveFrom(_receiveEventArg);
                 }
-                catch (ObjectDisposedException) { return; }
+                catch (ObjectDisposedException) { }
                 catch (SocketException ex)
                 {
                     SendError(ex.SocketErrorCode);
+                    _receiving = false;
                 }
-
             }
+            _receiving = false;
         }
 
         /// <summary>
