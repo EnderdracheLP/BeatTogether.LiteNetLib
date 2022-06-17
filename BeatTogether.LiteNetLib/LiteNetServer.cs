@@ -47,32 +47,33 @@ namespace BeatTogether.LiteNetLib
         }
 
         protected override void OnStarted()
-            => ReceiveAsync();
+            => _logger.Debug("LiteNetServer started");
 
+        //protected override void OnReceived(EndPoint endPoint, ReadOnlySpan<byte> buffer)
+        //{
+        //    ReceivePacket(endPoint, buffer);
+
+        //    // Important: Receive using thread pool is necessary here to avoid stack overflow with Socket.ReceiveFromAsync() method!
+        //    //bool success = ThreadPool.QueueUserWorkItem(o => { ReceiveAsync(); });
+
+        //    //ThreadPool.GetAvailableThreads(out int workerThreads, out int completionPortThreads);
+        //    ////if (!success)
+        //    ////{
+        //    ////    _logger.Warning("Receive failed");
+        //    ////}
+        //    //if (workerThreads < lastAvailableThreadCount || completionPortThreads < lastAvailableThreadCount)
+        //    //{
+        //    //    _logger.Warning($"Available Threads low workerThreads {workerThreads} completionPortThreads {completionPortThreads}");
+        //    //    lastAvailableThreadCount = Math.Max(completionPortThreads, workerThreads);
+        //    //}
+        //    //else if (workerThreads == 0 || completionPortThreads == 0)
+        //    //{
+        //    //    _logger.Error("Out of threads, server overloaded");
+        //    //}
+        //}
+
+        //private void ReceivePacket(EndPoint endPoint, ReadOnlySpan<byte> buffer)
         protected override void OnReceived(EndPoint endPoint, ReadOnlySpan<byte> buffer)
-        {
-            ReceivePacket(endPoint, buffer);
-
-            // Important: Receive using thread pool is necessary here to avoid stack overflow with Socket.ReceiveFromAsync() method!
-            //bool success = ThreadPool.QueueUserWorkItem(o => { ReceiveAsync(); });
-
-            ThreadPool.GetAvailableThreads(out int workerThreads, out int completionPortThreads);
-            //if (!success)
-            //{
-            //    _logger.Warning("Receive failed");
-            //}
-            if (workerThreads < lastAvailableThreadCount || completionPortThreads < lastAvailableThreadCount)
-            {
-                _logger.Warning($"Available Threads low workerThreads {workerThreads} completionPortThreads {completionPortThreads}");
-                lastAvailableThreadCount = Math.Max(completionPortThreads, workerThreads);
-            }
-            else if (workerThreads == 0 || completionPortThreads == 0)
-            {
-                _logger.Error("Out of threads, server overloaded");
-            }
-        }
-
-        private void ReceivePacket(EndPoint endPoint, ReadOnlySpan<byte> buffer)
         {
             if (_packetLayer != null)
             {

@@ -217,11 +217,11 @@ namespace NetCoreServer
             DatagramsSent = 0;
             DatagramsReceived = 0;
 
-            //_udpThread = new Thread(() => ReceiveAsync());
-            //_udpThread.Start();
-
             // Update the started flag
             IsStarted = true;
+
+            _udpThread = new Thread(Receive!);
+            _udpThread.Start(Socket);
 
             // Call the server started handler
             OnStarted();
@@ -266,6 +266,9 @@ namespace NetCoreServer
             if (!IsStarted)
                 return false;
 
+            // Update the started flag
+            IsStarted = false;
+
             // Reset event args
             _receiveEventArg.Completed -= OnAsyncCompleted;
             _sendEventArg.Completed -= OnAsyncCompleted;
@@ -273,8 +276,13 @@ namespace NetCoreServer
             // Call the server stopping handler
             OnStopping();
 
+            _udpThread.Join();
+
             try
             {
+                // Update the server socket disposed flag
+                IsSocketDisposed = true;
+
                 // Close the server socket
                 Socket.Close();
 
@@ -284,14 +292,8 @@ namespace NetCoreServer
                 // Dispose event arguments
                 _receiveEventArg.Dispose();
                 _sendEventArg.Dispose();
-
-                // Update the server socket disposed flag
-                IsSocketDisposed = true;
             }
             catch (ObjectDisposedException) {}
-
-            // Update the started flag
-            IsStarted = false;
 
             // Update sending/receiving flags
             _receiving = false;
@@ -334,7 +336,7 @@ namespace NetCoreServer
         private Buffer _sendBuffer;
         private SocketAsyncEventArgs _sendEventArg;
         // Threads
-        //private Thread _udpThread;
+        private Thread _udpThread;
         // Logger
         private readonly ILogger _logger = Log.ForContext<UdpServer>();
 
@@ -512,6 +514,55 @@ namespace NetCoreServer
                     SendError(ex.SocketErrorCode);
                     _receiving = false;
                 }
+            }
+            _receiving = false;
+        }
+
+        private void Receive(object state)
+        {
+            if (_receiving)
+                return;
+
+            if (!IsStarted)
+                return;
+
+            while (IsStarted && !IsSocketDisposed)
+            {
+                //try
+                //{
+                    //while (_receiving) Thread.Yield();
+                    //if (Socket == null) return;
+                    //while (!IsSocketDisposed && (_receiving || Socket.Available <= 0)) continue;
+                    //while (!IsSocketDisposed && (_receiving || Socket.Available <= 0)) Thread.Yield();
+                    while (IsStarted && (_receiving || Socket.Available <= 0)) Thread.Yield();
+                    _receiving = true;
+                    //var buffer = new byte[size];
+                    //var length = Receive(ref _receiveEndpoint, _receiveBuffer.Data);
+                    //_receiving = true;
+                    //// Receive datagram from the client
+                    //int received = Socket.ReceiveFrom(_receiveBuffer.Data, 0, (int)_receiveBuffer.Capacity, SocketFlags.None, ref _receiveEndpoint);
+
+                    //// Update statistic
+                    //DatagramsReceived++;
+                    //BytesReceived += received;
+
+                    //// Call the datagram received handler
+                    //_receiving = false;
+                    //OnReceived(_receiveEndpoint, _receiveBuffer.Data.AsSpan(0, (int)_receiveBuffer.Capacity));
+                    // Async receive with the receive handler
+                    Socket socket = (Socket)state;
+                    //if (IsSocketDisposed) return;
+                    _receiveEventArg.RemoteEndPoint = _receiveEndpoint;
+                    _receiveEventArg.SetBuffer(_receiveBuffer.Data, 0, (int)_receiveBuffer.Capacity);
+                    if (!socket.ReceiveFromAsync(_receiveEventArg))
+                        ProcessReceiveFrom(_receiveEventArg);
+                //}
+                //catch (ObjectDisposedException) { }
+                //catch (SocketException ex)
+                //{
+                //    SendError(ex.SocketErrorCode);
+                //    _receiving = false;
+                //}
             }
             _receiving = false;
         }
